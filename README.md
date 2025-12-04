@@ -1,3 +1,29 @@
+# 🚀 Stajyer Asistanı (Intern Assistant)
+
+Bu proje, staj arama sürecini otomatize eden, yapay zeka destekli bir web uygulamasıdır. Google Gemini AI kullanarak şirketleri analiz eder, kişiselleştirilmiş staj başvurusu mailleri oluşturur ve Google Apps Script altyapısı ile CV'nizi ekleyerek otomatik gönderim yapar.
+
+![Project Status](https://img.shields.io/badge/Status-Active-success)
+![License](https://img.shields.io/badge/License-MIT-blue)
+![Tech Stack](https://img.shields.io/badge/Tech-React%20%7C%20Vite%20%7C%20TypeScript%20%7C%20Tailwind-blueviolet)
+
+## ✨ Özellikler
+
+* **🤖 Otopilot Modu:** Seçilen şehirdeki teknoloji şirketlerini otomatik bulur, analiz eder ve başvuru yapar.
+* **🧠 Yapay Zeka Analizi:** Google Gemini AI ile şirketin sektörünü, odak alanlarını ve kültürünü analiz eder.
+* **✍️ Kişiselleştirilmiş Mailler:** Her şirket için özel, samimi ve profesyonel başvuru metinleri yazar.
+* **📎 Otomatik CV Ekleme:** PDF/Word formatındaki CV'nizi maillere otomatik olarak ekler.
+* **📧 Google Altyapısı:** Mailleri kendi Gmail hesabınız üzerinden (Google Apps Script ile) güvenli bir şekilde gönderir.
+* **💾 Akıllı Kayıt Sistemi:** Gönderilen mailleri ve şirketleri tarayıcı hafızasında (localStorage) tutar, mükerrer gönderimi engeller.
+* **📱 İletişim Bilgileri:** CV'nizden telefon, LinkedIn ve Portfolio bilgilerinizi otomatik çeker ve imza olarak ekler.
+
+## 🛠️ Kullanılan Teknolojiler
+
+* **Frontend:** React, Vite, TypeScript
+* **Styling:** Tailwind CSS, Lucide React (İkonlar)
+* **AI:** Google Gemini 1.5 Flash API
+* **Backend (Serverless):** Google Apps Script (Mail gönderimi için)
+* **Database:** LocalStorage (Tarayıcı tabanlı kalıcı veri) & Supabase (Opsiyonel)
+
 ## 🚀 Kurulum ve Çalıştırma
 
 * Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin:
