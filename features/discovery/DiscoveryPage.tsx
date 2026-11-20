@@ -2,7 +2,7 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { Check, Plus, Search } from 'lucide-react';
 import { Button, buttonClass } from '../../components/Button';
 import { InputField } from '../../components/InputField';
-import { PageHeader, Section } from '../../components/Page';
+import { ItemHead, ListPane, Panes } from '../../components/Panes';
 import { EmptyState, InlineError, SkeletonRows } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { isAbort, userMessage } from '../../lib/errors';
@@ -77,19 +77,18 @@ export function DiscoveryPage() {
   };
 
   return (
-    <>
-      <PageHeader
-        title="Şirket keşfi"
-        description="Şehir ya da teknokent seç; yapay zeka web aramasıyla staj verebilecek şirketleri listeler."
-      />
-
-      <div className="flex flex-col gap-6">
-        <Section title="Arama">
-          <form
-            onSubmit={search}
-            noValidate
-            className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-start"
-          >
+    <Panes>
+      <ListPane title="Şirket keşfi" count={results?.length || undefined}>
+        <form
+          onSubmit={search}
+          noValidate
+          className="flex flex-col gap-4 border-b border-line px-4 py-4 split:px-5"
+        >
+          <p className="text-sm text-ink-2">
+            Yapay zeka web aramasıyla staj verebilecek şirketleri listeler. Havuzdaki ve daha önce
+            mail attığın şirketler listeye girmez.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 split:grid-cols-1">
             <InputField
               label="Şehir"
               required
@@ -105,53 +104,43 @@ export function DiscoveryPage() {
               value={technopark}
               onChange={(e) => setTechnopark(e.target.value)}
             />
-            <datalist id={listId}>
-              {TECHNOPARKS.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-            <Button
-              type="submit"
-              loading={loading}
-              icon={<Search aria-hidden="true" className="size-4" />}
-              className="md:mt-[1.625rem]"
-            >
-              Şirket bul
-            </Button>
-          </form>
-        </Section>
-
-        <section aria-labelledby="results-title" className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 id="results-title" className="text-base font-semibold">
-              Sonuçlar
-            </h2>
-            {results && results.length > 0 && (
-              <span className="tabular text-sm text-ink-3">{results.length} şirket</span>
-            )}
           </div>
+          <datalist id={listId}>
+            {TECHNOPARKS.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+          <Button
+            type="submit"
+            loading={loading}
+            icon={<Search aria-hidden="true" className="size-4" />}
+            className="self-start"
+          >
+            Şirket bul
+          </Button>
+        </form>
 
+        <section aria-label="Sonuçlar" aria-busy={loading || undefined}>
           {error && (
-            <InlineError
-              action={
-                <Button variant="secondary" size="sm" onClick={() => search()}>
-                  Yeniden dene
-                </Button>
-              }
-            >
-              {error}
-            </InlineError>
+            <div className="px-4 pt-4 split:px-5">
+              <InlineError
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => search()}>
+                    Yeniden dene
+                  </Button>
+                }
+              >
+                {error}
+              </InlineError>
+            </div>
           )}
 
           {loading ? (
-            <div className="rounded-panel border border-line bg-surface px-5">
-              <SkeletonRows rows={5} label="Şirketler aranıyor" />
-            </div>
+            <SkeletonRows rows={5} label="Şirketler aranıyor" />
           ) : results === null ? (
             !error && (
               <EmptyState title="Henüz arama yapmadın">
-                Şehri yazıp “Şirket bul”a bas. Havuzdaki ve daha önce mail attığın şirketler listeye
-                girmez.
+                Şehri yaz ve “Şirket bul”a bas. Sonuçlar burada listelenir.
               </EmptyState>
             )
           ) : results.length === 0 ? (
@@ -159,8 +148,8 @@ export function DiscoveryPage() {
               Başka bir teknokent dene ya da şirketi havuza elle ekle.
             </EmptyState>
           ) : (
-            <div className="rounded-panel border border-line bg-surface">
-              <ul className="divide-y divide-line">
+            <>
+              <ul aria-label="Bulunan şirketler">
                 {results.map((c) => {
                   const key = normalizeName(c.name);
                   const added = inPool.has(key);
@@ -168,19 +157,17 @@ export function DiscoveryPage() {
                   return (
                     <li
                       key={c.name}
-                      className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"
+                      className="flex flex-col gap-3 border-b border-line px-4 py-4 split:px-5"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-ink">{c.name}</p>
-                        <p className="text-sm text-ink-3">{c.location}</p>
-                        {c.brief && (
-                          <p className="mt-1 max-w-prose text-[0.9375rem] text-ink-2">{c.brief}</p>
-                        )}
+                      <div className="min-w-0">
+                        <ItemHead title={c.name} />
+                        <span className="block text-sm text-ink-3">{c.location}</span>
+                        {c.brief && <p className="mt-1 text-ink-2">{c.brief}</p>}
                       </div>
                       {done ? (
                         <span className="text-sm text-ink-3">Daha önce başvurdun</span>
                       ) : added ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm text-ok">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ok">
                           <Check aria-hidden="true" className="size-4" /> Havuzda
                         </span>
                       ) : (
@@ -190,6 +177,7 @@ export function DiscoveryPage() {
                           onClick={() => add(c.name)}
                           icon={<Plus aria-hidden="true" className="size-4" />}
                           aria-label={`${c.name} şirketini havuza ekle`}
+                          className="self-start"
                         >
                           Havuza ekle
                         </Button>
@@ -198,22 +186,20 @@ export function DiscoveryPage() {
                   );
                 })}
               </ul>
-              {sources.length > 0 && (
-                <div className="border-t border-line px-5 py-3">
-                  <SourceLinks sources={sources} label="Arama kaynakları" />
-                </div>
-              )}
-            </div>
-          )}
-          {results && results.some((c) => inPool.has(normalizeName(c.name))) && (
-            <a href={href('havuz')} className={buttonClass('ghost', 'sm', 'self-start')}>
-              Havuza git
-            </a>
+              <div className="flex flex-col items-start gap-3 px-4 py-4 split:px-5">
+                {sources.length > 0 && <SourceLinks sources={sources} label="Arama kaynakları" />}
+                {results.some((c) => inPool.has(normalizeName(c.name))) && (
+                  <a href={href('havuz')} className={buttonClass('secondary', 'sm')}>
+                    Havuza git
+                  </a>
+                )}
+              </div>
+            </>
           )}
         </section>
+      </ListPane>
 
-        <AutopilotPanel city={city} technopark={technopark} />
-      </div>
-    </>
+      <AutopilotPanel city={city} technopark={technopark} />
+    </Panes>
   );
 }

@@ -69,7 +69,7 @@ describe('App (demo modu)', () => {
     await user.type(input, 'Kuzgun Yazılım');
     await user.click(screen.getByRole('button', { name: 'Ekle' }));
     expect(
-      await screen.findByRole('heading', { level: 3, name: 'Kuzgun Yazılım' }),
+      await screen.findByRole('heading', { level: 2, name: 'Kuzgun Yazılım' }),
     ).toBeInTheDocument();
 
     await user.type(input, 'kuzgun  yazılım');

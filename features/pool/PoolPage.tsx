@@ -1,25 +1,39 @@
 import { useState, type FormEvent } from 'react';
 import { Plus } from 'lucide-react';
+import { useSearchQuery } from '../../components/AppShell';
 import { Button, buttonClass } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { InputField } from '../../components/InputField';
-import { PageHeader, Section } from '../../components/Page';
+import {
+  ItemHead,
+  ListPane,
+  PaneItem,
+  PanePlaceholder,
+  Panes,
+  ReadingPane,
+  revealDetail,
+} from '../../components/Panes';
+import { EmailBadge, StatusBadge } from '../../components/StatusBadge';
 import { EmptyState } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { href } from '../../lib/router';
-import { normalizeName } from '../../lib/text';
+import { matchesQuery, normalizeName } from '../../lib/text';
 import type { TargetCompany } from '../../types';
 import { useStore } from '../AppStore';
-import { PoolItem } from './PoolItem';
+import { PoolDetail } from './PoolDetail';
 
 export function PoolPage() {
   const { companies, logs, addCompany, removeCompany } = useStore();
   const toast = useToast();
+  const query = useSearchQuery();
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<TargetCompany | null>(null);
 
   const pool = companies.filter((c) => c.status !== 'sent');
+  const visible = pool.filter((c) => matchesQuery(query, c.name, c.recipient));
+  const selected = visible.find((c) => c.id === selectedId) ?? visible[0];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -31,7 +45,8 @@ export function PoolPage() {
     if (logs.some((l) => l.status === 'success' && normalizeName(l.companyName) === key)) {
       return setNameError('Bu şirkete daha önce mail gönderdin.');
     }
-    addCompany(clean);
+    const added = addCompany(clean);
+    if (added) setSelectedId(added.id);
     setName('');
     setNameError(undefined);
     toast.success(`${clean} havuza eklendi.`);
@@ -39,18 +54,14 @@ export function PoolPage() {
 
   return (
     <>
-      <PageHeader
-        title="Havuz"
-        description="Şirketleri analiz et, İK adresini doğrula, taslak yaz. Taslaklar onay kuyruğuna geçer."
-      />
-      <div className="flex flex-col gap-6">
-        <Section title="Şirket ekle">
+      <Panes>
+        <ListPane title="Havuz" count={pool.length}>
           <form
             onSubmit={submit}
             noValidate
-            className="flex flex-col gap-3 sm:flex-row sm:items-start"
+            className="flex items-start gap-2 border-b border-line px-4 py-4 split:px-5"
           >
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <InputField
                 label="Şirket adı"
                 value={name}
@@ -63,17 +74,12 @@ export function PoolPage() {
               type="submit"
               variant="secondary"
               icon={<Plus aria-hidden="true" className="size-4" />}
-              className="sm:mt-[1.625rem]"
+              className="mt-[1.625rem]"
             >
               Ekle
             </Button>
           </form>
-        </Section>
 
-        <section aria-labelledby="pool-title" className="flex flex-col gap-3">
-          <h2 id="pool-title" className="text-base font-semibold">
-            Şirketler <span className="tabular font-normal text-ink-3">({pool.length})</span>
-          </h2>
           {pool.length === 0 ? (
             <EmptyState
               title="Havuz boş"
@@ -85,15 +91,48 @@ export function PoolPage() {
             >
               Keşif sayfasından şirket ekle ya da yukarıya bir şirket adı yaz.
             </EmptyState>
+          ) : visible.length === 0 ? (
+            <p className="px-4 py-8 text-ink-2 split:px-5">“{query}” ile eşleşen şirket yok.</p>
           ) : (
-            <ul className="divide-y divide-line rounded-panel border border-line bg-surface">
-              {pool.map((c) => (
-                <PoolItem key={c.id} company={c} onDelete={() => setToDelete(c)} />
+            <ul aria-label="Havuzdaki şirketler">
+              {visible.map((c) => (
+                <PaneItem
+                  key={c.id}
+                  active={selected?.id === c.id}
+                  onSelect={() => {
+                    setSelectedId(c.id);
+                    revealDetail();
+                  }}
+                >
+                  <ItemHead title={c.name} meta={c.analysis?.industry} />
+                  <span className="mt-0.5 block truncate text-sm text-ink-3">
+                    {c.recipient || (c.analysis ? 'Alıcı yok' : 'Henüz analiz edilmedi')}
+                  </span>
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    <StatusBadge status={c.status} />
+                    {c.analysis && (
+                      <EmailBadge
+                        verified={c.analysis.emailVerified}
+                        hasCandidate={Boolean(c.analysis.emailCandidate)}
+                      />
+                    )}
+                  </span>
+                </PaneItem>
               ))}
             </ul>
           )}
-        </section>
-      </div>
+        </ListPane>
+
+        {selected ? (
+          <PoolDetail key={selected.id} company={selected} onDelete={() => setToDelete(selected)} />
+        ) : (
+          <ReadingPane label="Şirket ayrıntısı" wideOnly>
+            <PanePlaceholder>
+              Havuzdan bir şirket seçince analizi, İK adresi ve kaynakları burada açılır.
+            </PanePlaceholder>
+          </ReadingPane>
+        )}
+      </Panes>
 
       <ConfirmDialog
         open={toDelete !== null}

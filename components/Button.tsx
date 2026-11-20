@@ -2,25 +2,26 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size = 'sm' | 'md';
+type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-ink hover:bg-accent-hover',
+  primary: 'bg-accent font-semibold text-accent-ink hover:bg-accent-hover',
   secondary:
-    'border border-line-strong/50 bg-surface text-ink hover:border-line-strong hover:bg-sunken',
-  ghost: 'text-ink-2 hover:bg-sunken hover:text-ink',
-  danger: 'bg-danger text-surface hover:opacity-90',
+    'border border-line bg-surface font-medium text-ink hover:border-line-strong/60 hover:bg-pane',
+  ghost: 'font-medium text-ink-2 hover:bg-sunken hover:text-ink',
+  danger: 'bg-danger font-semibold text-surface hover:opacity-90',
 };
 
 const SIZES: Record<Size, string> = {
   sm: 'h-9 gap-1.5 px-3 text-sm',
-  md: 'h-11 gap-2 px-4 text-[0.9375rem]',
+  md: 'h-11 gap-2 px-3.5 text-[0.9375rem]',
+  lg: 'h-12 gap-2.5 px-6 text-base',
 };
 
 export function buttonClass(variant: Variant = 'primary', size: Size = 'md', extra = ''): string {
   return [
-    'inline-flex shrink-0 items-center justify-center rounded-control font-medium whitespace-nowrap',
-    'transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-55',
+    'inline-flex shrink-0 items-center justify-center rounded-control whitespace-nowrap',
+    'transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50',
     VARIANTS[variant],
     SIZES[size],
     extra,

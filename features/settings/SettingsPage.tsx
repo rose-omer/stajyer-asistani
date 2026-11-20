@@ -2,7 +2,14 @@ import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { InputField } from '../../components/InputField';
-import { PageHeader, Section } from '../../components/Page';
+import {
+  ListPane,
+  PaneItem,
+  Panes,
+  PaneTitle,
+  ReadingPane,
+  revealDetail,
+} from '../../components/Panes';
 import { Badge } from '../../components/StatusBadge';
 import { canSendWithGmail, config, isDemo, MAX_DAILY_LIMIT } from '../../lib/config';
 import { KEYS, writeString } from '../../lib/storage';
@@ -17,8 +24,18 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: 'Koyu' },
 ];
 
+type SectionKey = 'gorunum' | 'gonderim' | 'baglantilar' | 'veri';
+
+const SECTIONS: { key: SectionKey; title: string }[] = [
+  { key: 'gorunum', title: 'Görünüm' },
+  { key: 'gonderim', title: 'Gönderim' },
+  { key: 'baglantilar', title: 'Bağlantılar' },
+  { key: 'veri', title: 'Veri ve izin' },
+];
+
 export function SettingsPage() {
   const { settings, updateSettings, repoKind } = useStore();
+  const [section, setSection] = useState<SectionKey>('gorunum');
   const [limit, setLimit] = useState(String(settings.dailyLimit));
   const [confirmReset, setConfirmReset] = useState(false);
   const themeName = useId();
@@ -29,103 +46,141 @@ export function SettingsPage() {
       ? `1 ile ${MAX_DAILY_LIMIT} arasında bir sayı yaz.`
       : undefined;
 
+  const summary: Record<SectionKey, string> = {
+    gorunum: `Tema: ${THEMES.find((t) => t.value === settings.theme)?.label ?? 'Sistem'}`,
+    gonderim: `Günde en çok ${settings.dailyLimit} mail`,
+    baglantilar: isDemo ? 'Demo modu, gönderim kapalı' : 'Gerçek mod',
+    veri: repoKind === 'cloud' ? 'Supabase ve bu tarayıcı' : 'Yalnız bu tarayıcı',
+  };
+
+  const current = SECTIONS.find((s) => s.key === section) ?? SECTIONS[0];
+
   return (
     <>
-      <PageHeader title="Ayarlar" />
-      <div className="flex flex-col gap-6">
-        <Section title="Görünüm">
-          <fieldset className="flex flex-col gap-3">
-            <legend className="mb-2 text-sm font-medium text-ink">Tema</legend>
-            <div className="flex flex-wrap gap-2">
-              {THEMES.map((t) => (
-                <label
-                  key={t.value}
-                  className="flex h-10 cursor-pointer items-center gap-2 rounded-control border border-line-strong/50 px-3 text-[0.9375rem] has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent-text has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
-                >
-                  <input
-                    type="radio"
-                    name={themeName}
-                    value={t.value}
-                    checked={settings.theme === t.value}
-                    onChange={() => updateSettings({ theme: t.value })}
-                    className="sr-only"
+      <Panes>
+        <ListPane title="Ayarlar">
+          <ul aria-label="Ayar bölümleri">
+            {SECTIONS.map((s) => (
+              <PaneItem
+                key={s.key}
+                active={section === s.key}
+                onSelect={() => {
+                  setSection(s.key);
+                  revealDetail();
+                }}
+              >
+                <strong className="block text-base font-semibold text-ink">{s.title}</strong>
+                <span className="mt-0.5 block truncate text-sm text-ink-3">{summary[s.key]}</span>
+              </PaneItem>
+            ))}
+          </ul>
+        </ListPane>
+
+        <ReadingPane label={current.title}>
+          <div className="flex max-w-[46rem] flex-col gap-6">
+            <PaneTitle>{current.title}</PaneTitle>
+
+            {section === 'gorunum' && (
+              <fieldset className="flex flex-col gap-3">
+                <legend className="mb-2 font-medium text-ink">Tema</legend>
+                <div className="flex flex-wrap gap-2">
+                  {THEMES.map((t) => (
+                    <label
+                      key={t.value}
+                      className="flex h-11 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-4 has-checked:border-accent has-checked:bg-accent-soft has-checked:font-semibold has-checked:text-accent-text has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
+                    >
+                      <input
+                        type="radio"
+                        name={themeName}
+                        value={t.value}
+                        checked={settings.theme === t.value}
+                        onChange={() => updateSettings({ theme: t.value })}
+                        className="sr-only"
+                      />
+                      {t.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-sm text-ink-3">
+                  Sistem, bilgisayarının açık ya da koyu ayarını izler.
+                </p>
+              </fieldset>
+            )}
+
+            {section === 'gonderim' && (
+              <div className="flex flex-col gap-4">
+                <p className="max-w-[62ch] text-ink-2">
+                  Gmail tüketici hesapları günde 100 alıcıyla sınırlıdır. Düşük bir sınır itibarını
+                  korur.
+                </p>
+                <div className="max-w-xs">
+                  <InputField
+                    label="Günlük gönderim sınırı"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_DAILY_LIMIT}
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(e.target.value);
+                      const v = Number(e.target.value);
+                      if (Number.isInteger(v) && v >= 1 && v <= MAX_DAILY_LIMIT)
+                        updateSettings({ dailyLimit: v });
+                    }}
+                    error={limitError}
+                    hint={`En çok ${MAX_DAILY_LIMIT}.`}
                   />
-                  {t.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </Section>
+                </div>
+              </div>
+            )}
 
-        <Section
-          title="Gönderim"
-          description="Gmail tüketici hesapları günde 100 alıcıyla sınırlıdır. Düşük bir sınır itibarını korur."
-        >
-          <div className="max-w-xs">
-            <InputField
-              label="Günlük gönderim sınırı"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={MAX_DAILY_LIMIT}
-              value={limit}
-              onChange={(e) => {
-                setLimit(e.target.value);
-                const v = Number(e.target.value);
-                if (Number.isInteger(v) && v >= 1 && v <= MAX_DAILY_LIMIT)
-                  updateSettings({ dailyLimit: v });
-              }}
-              error={limitError}
-              hint={`En çok ${MAX_DAILY_LIMIT}.`}
-            />
+            {section === 'baglantilar' && (
+              <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                <dt className="text-ink-3">Çalışma modu</dt>
+                <dd>
+                  {isDemo ? (
+                    <Badge tone="warn">Demo: sahte yanıt, gönderim kapalı</Badge>
+                  ) : (
+                    <Badge tone="ok">Gerçek</Badge>
+                  )}
+                </dd>
+                <dt className="text-ink-3">Veri deposu</dt>
+                <dd className="text-ink">
+                  {repoKind === 'cloud' ? 'Supabase (hesabına özel)' : 'Bu tarayıcı'}
+                </dd>
+                <dt className="text-ink-3">Gmail gönderimi</dt>
+                <dd className="text-ink">
+                  {canSendWithGmail
+                    ? 'Açık (gmail.send izni)'
+                    : config.googleClientId
+                      ? 'Demo modunda kapalı'
+                      : 'Kapalı: istemci kimliği tanımlı değil'}
+                </dd>
+                <dt className="text-ink-3">Yapay zeka modeli</dt>
+                <dd className="text-ink">
+                  {DEFAULT_GEMINI_MODEL}
+                  <span className="block text-sm text-ink-3">
+                    Sunucuda GEMINI_MODEL değişkeniyle değişir.
+                  </span>
+                </dd>
+              </dl>
+            )}
+
+            {section === 'veri' && (
+              <div className="flex flex-col items-start gap-4">
+                <p className="max-w-[62ch] text-ink-2">
+                  Bu tarayıcıdaki profil, havuz, geçmiş ve tercihleri siler; aydınlatma onayını geri
+                  alır.
+                  {repoKind === 'cloud' && ' Supabase’deki kayıtların silinmez.'}
+                </p>
+                <Button variant="secondary" onClick={() => setConfirmReset(true)}>
+                  Yerel verileri sil
+                </Button>
+              </div>
+            )}
           </div>
-        </Section>
-
-        <Section title="Bağlantılar">
-          <dl className="grid gap-x-6 gap-y-4 text-[0.9375rem] sm:grid-cols-[12rem_1fr]">
-            <dt className="text-ink-2">Çalışma modu</dt>
-            <dd>
-              {isDemo ? (
-                <Badge tone="warn">Demo: sahte yanıt, gönderim kapalı</Badge>
-              ) : (
-                <Badge tone="ok">Gerçek</Badge>
-              )}
-            </dd>
-            <dt className="text-ink-2">Veri deposu</dt>
-            <dd className="text-ink">
-              {repoKind === 'cloud' ? 'Supabase (hesabına özel)' : 'Bu tarayıcı'}
-            </dd>
-            <dt className="text-ink-2">Gmail gönderimi</dt>
-            <dd className="text-ink">
-              {canSendWithGmail
-                ? 'Açık (gmail.send izni)'
-                : config.googleClientId
-                  ? 'Demo modunda kapalı'
-                  : 'Kapalı: istemci kimliği tanımlı değil'}
-            </dd>
-            <dt className="text-ink-2">Yapay zeka modeli</dt>
-            <dd className="text-ink">
-              {DEFAULT_GEMINI_MODEL}
-              <span className="block text-sm text-ink-3">
-                Sunucuda GEMINI_MODEL değişkeniyle değişir.
-              </span>
-            </dd>
-          </dl>
-        </Section>
-
-        <Section title="Veri ve izin">
-          <div className="flex flex-col items-start gap-3">
-            <p className="max-w-prose text-[0.9375rem] text-ink-2">
-              Bu tarayıcıdaki profil, havuz, geçmiş ve tercihleri siler; aydınlatma onayını geri
-              alır.
-              {repoKind === 'cloud' && ' Supabase’deki kayıtların silinmez.'}
-            </p>
-            <Button variant="secondary" onClick={() => setConfirmReset(true)}>
-              Yerel verileri sil
-            </Button>
-          </div>
-        </Section>
-      </div>
+        </ReadingPane>
+      </Panes>
 
       <ConfirmDialog
         open={confirmReset}

@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
+import { useSearchQuery } from '../../components/AppShell';
 import { Button, buttonClass } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { PageHeader } from '../../components/Page';
-import { EmptyState, Notice } from '../../components/States';
+import {
+  ItemHead,
+  ListPane,
+  PaneItem,
+  PanePlaceholder,
+  Panes,
+  ReadingPane,
+  revealDetail,
+} from '../../components/Panes';
+import { EmailBadge, Badge } from '../../components/StatusBadge';
+import { EmptyState } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { canSendWithGmail, isDemo } from '../../lib/config';
 import { userMessage } from '../../lib/errors';
 import { href } from '../../lib/router';
+import { matchesQuery } from '../../lib/text';
 import { isValidEmail } from '../../services/mime';
 import type { TargetCompany } from '../../types';
 import { useStore } from '../AppStore';
@@ -27,25 +38,47 @@ export function splitByLimit<T>(items: readonly T[], remaining: number) {
   return { toSend: items.slice(0, n), skipped: items.slice(n) };
 }
 
+/** Gövdenin selamlamadan sonraki ilk satırı: listede önizleme olarak görünür. */
+function preview(body: string): string {
+  const lines = body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return (lines.length > 1 && lines[0].endsWith(',') ? lines[1] : lines[0]) ?? '';
+}
+
 export function QueuePage() {
   const { companies, send, sentToday, settings } = useStore();
   const toast = useToast();
+  const query = useSearchQuery();
   const queue = companies.filter((c) => c.status === 'generated' || c.status === 'sending');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<TargetCompany[] | null>(null);
   const [sending, setSending] = useState(false);
 
-  const selected = queue.find((c) => c.id === selectedId) ?? queue[0];
+  const visible = queue.filter((c) => matchesQuery(query, c.name, c.recipient));
+  const selected = visible.find((c) => c.id === selectedId) ?? visible[0];
   const blocked = sendBlockReason(sentToday, settings.dailyLimit);
   const remaining = Math.max(0, settings.dailyLimit - sentToday);
   const bulk = queue.filter((c) => checked.has(c.id));
+  const allChecked = visible.length > 0 && visible.every((c) => checked.has(c.id));
 
   const toggle = (id: string) =>
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      for (const c of visible) {
+        if (allChecked) next.delete(c.id);
+        else next.add(c.id);
+      }
       return next;
     });
 
@@ -71,19 +104,25 @@ export function QueuePage() {
 
   if (queue.length === 0) {
     return (
-      <>
-        <PageHeader title="Onay kuyruğu" description="Gönderilmeyi bekleyen taslaklar burada." />
-        <EmptyState
-          title="Onay bekleyen taslak yok"
-          action={
-            <a href={href('havuz')} className={buttonClass('primary', 'md')}>
-              Havuzu aç
-            </a>
-          }
-        >
-          Havuzda bir şirketi analiz edip taslak yazdığında burada görünür.
-        </EmptyState>
-      </>
+      <Panes>
+        <ListPane title="Onay kuyruğu" count={0}>
+          <EmptyState
+            title="Onay bekleyen taslak yok"
+            action={
+              <a href={href('havuz')} className={buttonClass('primary', 'md')}>
+                Havuzu aç
+              </a>
+            }
+          >
+            Havuzda bir şirketi analiz edip taslak yazdığında burada görünür.
+          </EmptyState>
+        </ListPane>
+        <ReadingPane label="Taslak önizlemesi" wideOnly>
+          <PanePlaceholder>
+            Kuyrukta bir taslak seçince mailin tamamı burada açılır.
+          </PanePlaceholder>
+        </ReadingPane>
+      </Panes>
     );
   }
 
@@ -91,80 +130,107 @@ export function QueuePage() {
 
   return (
     <>
-      <PageHeader
-        title="Onay kuyruğu"
-        description="Her maili oku, gerekirse düzenle. Mail yalnız sen onaylayınca gönderilir."
-        actions={
-          bulk.length > 0 && !blocked ? (
-            <Button
-              onClick={() => setConfirm(bulk)}
-              disabled={invalidBulk.length > 0}
-              icon={<Send aria-hidden="true" className="size-4" />}
-            >
-              {bulk.length} maili gönder
-            </Button>
-          ) : undefined
-        }
-      />
+      <Panes>
+        <ListPane
+          title="Onay kuyruğu"
+          count={queue.length}
+          actions={
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-2">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                disabled={visible.length === 0}
+                className="size-[1.125rem]"
+              />
+              Tümünü seç
+            </label>
+          }
+        >
+          {bulk.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent-soft px-4 py-3 split:px-5">
+              <p className="tabular mr-auto font-medium text-accent-text">
+                {bulk.length} taslak seçili
+              </p>
+              {blocked ? (
+                <p className="text-sm text-ink-2">Toplu gönderim şu an kapalı.</p>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => setConfirm(bulk)}
+                  disabled={invalidBulk.length > 0}
+                  icon={<Send aria-hidden="true" className="size-4" />}
+                >
+                  {bulk.length} maili gönder
+                </Button>
+              )}
+              {!blocked && invalidBulk.length > 0 && (
+                <p className="basis-full text-sm text-warn">
+                  {invalidBulk.length} taslakta geçerli alıcı yok; önce adresi düzelt.
+                </p>
+              )}
+            </div>
+          )}
 
-      <div className="flex flex-col gap-4">
-        {blocked ? (
-          <Notice tone={isDemo ? 'neutral' : 'warn'}>{blocked}</Notice>
-        ) : (
-          <p className="tabular text-sm text-ink-2">
-            Bugün {sentToday} / {settings.dailyLimit} mail gönderildi. {remaining} gönderim hakkın
-            kaldı.
-          </p>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="rounded-panel border border-line bg-surface lg:sticky lg:top-6 lg:self-start">
-            <ul aria-label="Onay bekleyen taslaklar" className="divide-y divide-line">
-              {queue.map((c) => {
-                const active = selected?.id === c.id;
-                return (
-                  <li
-                    key={c.id}
-                    className={`flex items-start gap-3 px-4 py-3 ${active ? 'bg-accent-soft' : ''}`}
-                  >
+          {visible.length === 0 ? (
+            <p className="px-4 py-8 text-ink-2 split:px-5">“{query}” ile eşleşen taslak yok.</p>
+          ) : (
+            <ul aria-label="Onay bekleyen taslaklar">
+              {visible.map((c) => (
+                <PaneItem
+                  key={c.id}
+                  active={selected?.id === c.id}
+                  onSelect={() => {
+                    setSelectedId(c.id);
+                    revealDetail();
+                  }}
+                  leading={
                     <input
                       type="checkbox"
                       checked={checked.has(c.id)}
                       onChange={() => toggle(c.id)}
                       aria-label={`${c.name} toplu gönderime ekle`}
-                      className="mt-1 size-4 shrink-0"
+                      className="mt-1 size-[1.125rem] shrink-0"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(c.id)}
-                      aria-current={active ? 'true' : undefined}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span
-                        className={`block truncate ${active ? 'font-semibold text-accent-text' : 'font-medium text-ink'}`}
-                      >
-                        {c.name}
-                      </span>
-                      <span className="block truncate text-sm text-ink-3">
-                        {c.status === 'sending' ? 'Gönderiliyor' : c.recipient || 'Alıcı yok'}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
+                  }
+                >
+                  <ItemHead title={c.name} meta={c.analysis?.industry} />
+                  <span className="mt-0.5 block truncate text-ink">
+                    {c.emailDraft?.subject ?? 'Konu yok'}
+                  </span>
+                  <span className="block truncate text-sm text-ink-3">
+                    {c.recipient || 'Alıcı yok'}
+                    {c.emailDraft ? `, ${preview(c.emailDraft.body)}` : ''}
+                  </span>
+                  <span className="mt-2 flex flex-wrap gap-1.5">
+                    {c.status === 'sending' ? (
+                      <Badge tone="accent">Gönderiliyor</Badge>
+                    ) : c.analysis ? (
+                      <EmailBadge
+                        verified={c.analysis.emailVerified}
+                        hasCandidate={Boolean(c.analysis.emailCandidate || c.recipient)}
+                      />
+                    ) : null}
+                  </span>
+                </PaneItem>
+              ))}
             </ul>
-          </div>
-
-          {selected && (
-            <DraftDetail
-              key={selected.id}
-              company={selected}
-              blocked={blocked}
-              onSend={() => setConfirm([selected])}
-            />
           )}
-        </div>
-      </div>
+        </ListPane>
+
+        {selected ? (
+          <DraftDetail
+            key={selected.id}
+            company={selected}
+            blocked={blocked}
+            onSend={() => setConfirm([selected])}
+          />
+        ) : (
+          <ReadingPane label="Taslak önizlemesi" wideOnly>
+            <PanePlaceholder>Aramayla eşleşen taslak yok.</PanePlaceholder>
+          </ReadingPane>
+        )}
+      </Panes>
 
       <ConfirmDialog
         open={confirm !== null}

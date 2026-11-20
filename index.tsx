@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/ibm-plex-sans';
-import '@fontsource-variable/source-serif-4';
+import '@fontsource-variable/instrument-sans';
+import '@fontsource-variable/literata/opsz.css';
 import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/States';

@@ -13,7 +13,7 @@ const TONES: Record<Tone, string> = {
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-medium whitespace-nowrap ${TONES[tone]}`}
+      className={`inline-flex min-h-6 items-center gap-1 rounded-full px-2 py-0.5 text-[0.8125rem] leading-tight font-medium whitespace-nowrap ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -44,7 +44,9 @@ export function EmailBadge({
   hasCandidate: boolean;
 }) {
   if (verified) return <Badge tone="ok">İK maili doğrulandı</Badge>;
-  return (
-    <Badge tone="warn">{hasCandidate ? 'İK maili doğrulanmadı' : 'İK maili bulunamadı'}</Badge>
+  return hasCandidate ? (
+    <Badge tone="warn">İK maili doğrulanmadı</Badge>
+  ) : (
+    <Badge tone="danger">İK maili bulunamadı</Badge>
   );
 }

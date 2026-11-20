@@ -12,6 +12,7 @@ import { QueuePage } from './features/queue/QueuePage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { isDemo } from './lib/config';
 import { useRoute, type Route } from './lib/router';
+import { initialsOf } from './lib/text';
 import { useApplyTheme } from './lib/theme';
 
 const PAGES: Record<Route, () => React.JSX.Element> = {
@@ -39,9 +40,11 @@ function Shell({ auth }: { auth: AuthInfo }) {
       route={route}
       poolCount={pool}
       queueCount={queue}
+      historyCount={store.logs.length}
       sentToday={store.sentToday}
       dailyLimit={store.settings.dailyLimit}
-      modeLabel={isDemo ? 'Demo modu' : 'Staj başvuru asistanı'}
+      demo={isDemo}
+      initials={initialsOf(store.profile.fullName)}
       userEmail={auth.userEmail}
       onSignOut={auth.signOut}
     >

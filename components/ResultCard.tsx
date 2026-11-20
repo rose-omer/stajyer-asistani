@@ -2,18 +2,53 @@ import { useState } from 'react';
 import { Check, Copy, Paperclip } from 'lucide-react';
 import type { GeneratedEmail } from '../types';
 import { Button } from './Button';
+import { PaneTitle } from './Panes';
 
 interface ResultCardProps {
   email: GeneratedEmail;
   recipient?: string;
+  sender?: string;
   attachmentName?: string;
 }
 
 /**
- * Mail önizlemesi. Gövde bir mektup gibi serif yazıyla dizilir;
- * kullanıcı gönderilecek metni olduğu gibi okur.
+ * Mail önizlemesi: konu başlık olur, zarf bilgisi (Kime, Kimden, Ek) altında durur,
+ * gövde bir mektup gibi serif yazıyla dizilir. Kullanıcı gönderilecek metni olduğu gibi okur.
  */
-export function ResultCard({ email, recipient, attachmentName }: ResultCardProps) {
+export function ResultCard({ email, recipient, sender, attachmentName }: ResultCardProps) {
+  return (
+    <article aria-labelledby="draft-title" className="flex max-w-[46rem] flex-col">
+      <PaneTitle id="draft-title">{email.subject}</PaneTitle>
+      <dl className="mt-5 grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-4 gap-y-1.5 border-b border-line pb-5">
+        <dt className="text-ink-3">Kime</dt>
+        <dd className="break-words text-ink">{recipient || 'Alıcı yok'}</dd>
+        {sender && (
+          <>
+            <dt className="text-ink-3">Kimden</dt>
+            <dd className="break-words text-ink">{sender}</dd>
+          </>
+        )}
+        <dt className="text-ink-3">Ek</dt>
+        <dd className="flex min-w-0 items-center gap-1.5 text-ink">
+          {attachmentName ? (
+            <>
+              <Paperclip aria-hidden="true" className="size-[0.9375rem] shrink-0 text-ink-2" />
+              <span className="truncate">{attachmentName}</span>
+            </>
+          ) : (
+            <span className="text-ink-3">Ek yok</span>
+          )}
+        </dd>
+      </dl>
+      <div className="max-w-[44rem] pt-7 font-serif text-[1.0625rem] leading-[1.75] whitespace-pre-wrap text-ink">
+        {email.body}
+      </div>
+    </article>
+  );
+}
+
+/** Konu ve gövdeyi panoya kopyalar; sonucu ekran okuyucuya bildirir. */
+export function CopyTextButton({ email }: { email: GeneratedEmail }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -27,43 +62,18 @@ export function ResultCard({ email, recipient, attachmentName }: ResultCardProps
   };
 
   return (
-    <article aria-label="Mail önizlemesi" className="flex flex-col">
-      <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1.5 border-b border-line pb-4 text-sm">
-        <dt className="text-ink-3">Alıcı</dt>
-        <dd className="break-all text-ink">{recipient || 'Belirtilmedi'}</dd>
-        <dt className="text-ink-3">Konu</dt>
-        <dd className="font-medium text-ink">{email.subject}</dd>
-        <dt className="text-ink-3">Ek</dt>
-        <dd className="flex items-center gap-1.5 text-ink">
-          {attachmentName ? (
-            <>
-              <Paperclip aria-hidden="true" className="size-3.5 text-ink-3" />
-              {attachmentName}
-            </>
-          ) : (
-            <span className="text-ink-3">Ek yok</span>
-          )}
-        </dd>
-      </dl>
-      <div className="max-w-[68ch] py-5 font-serif text-[1.0625rem] leading-[1.7] whitespace-pre-wrap text-ink">
-        {email.body}
-      </div>
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={copy}
-          icon={
-            copied ? (
-              <Check aria-hidden="true" className="size-4" />
-            ) : (
-              <Copy aria-hidden="true" className="size-4" />
-            )
-          }
-        >
-          <span aria-live="polite">{copied ? 'Kopyalandı' : 'Metni kopyala'}</span>
-        </Button>
-      </div>
-    </article>
+    <Button
+      variant="secondary"
+      onClick={copy}
+      icon={
+        copied ? (
+          <Check aria-hidden="true" className="size-4" />
+        ) : (
+          <Copy aria-hidden="true" className="size-4" />
+        )
+      }
+    >
+      <span aria-live="polite">{copied ? 'Kopyalandı' : 'Metni kopyala'}</span>
+    </Button>
   );
 }
