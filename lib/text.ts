@@ -1,0 +1,38 @@
+/** Şirket adını karşılaştırma için normalleştirir (Türkçe küçük harf, tek boşluk). */
+export function normalizeName(name: string): string {
+  return name.toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim();
+}
+
+export function newId(): string {
+  return crypto.randomUUID();
+}
+
+const dateFmt = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+
+export function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d);
+}
+
+export function isSameLocalDay(iso: string, now = new Date()): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+}

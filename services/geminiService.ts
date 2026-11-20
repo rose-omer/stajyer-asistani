@@ -1,180 +1,130 @@
-import { GoogleGenAI } from "@google/genai";
-import { ApplicantProfile, TargetCompany, DiscoveredCompany } from "../types";
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import type { z } from 'zod';
+import { isDemo } from '../lib/config';
+import { AppError, type ErrorCode } from '../lib/errors';
+import { supabase } from '../lib/supabase';
+import {
+  CompanyAnalysisResponseSchema,
+  CvExtractSchema,
+  DiscoverResponseSchema,
+  EmailDraftSchema,
+  type AiRequest,
+  type CompanyAnalysisResponse,
+  type CvExtract,
+  type DiscoverResponse,
+  type DraftProfile,
+  type EmailDraft,
+} from '../supabase/functions/_shared/schemas';
+import type { ApplicantProfile, TargetCompany } from '../types';
+import { demoAi } from './demoAi';
 
-// Helper to reliably parse JSON from AI response
-const safeJSONParse = <T>(text: string, fallback: T): T => {
-  try {
-    let cleanText = text.replace(/```json/g, '').replace(/```/g, '');
-    const firstBrace = cleanText.indexOf('{');
-    const firstBracket = cleanText.indexOf('[');
-    
-    let startIndex = -1;
-    if (firstBrace !== -1 && firstBracket !== -1) startIndex = Math.min(firstBrace, firstBracket);
-    else if (firstBrace !== -1) startIndex = firstBrace;
-    else startIndex = firstBracket;
+/**
+ * İstemci tarafı AI erişimi. Anahtar yok; her çağrı Supabase Edge Function'a gider.
+ * Demo modunda sahte yanıt döner.
+ */
 
-    const lastBrace = cleanText.lastIndexOf('}');
-    const lastBracket = cleanText.lastIndexOf(']');
-    let endIndex = Math.max(lastBrace, lastBracket);
-
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      cleanText = cleanText.substring(startIndex, endIndex + 1);
-      return JSON.parse(cleanText) as T;
-    }
-    return JSON.parse(cleanText) as T;
-  } catch (e) {
-    console.warn("JSON Parse Warning. Raw:", text);
-    return fallback;
-  }
+const STATUS_CODES: Record<number, ErrorCode> = {
+  401: 'UNAUTHORIZED',
+  422: 'VALIDATION_ERROR',
+  429: 'RATE_LIMITED',
+  499: 'ABORTED',
+  502: 'UPSTREAM_ERROR',
 };
 
-// Initialize AI with Vite environment variable
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-
-export const analyzeCV = async (fileBase64: string, mimeType: string): Promise<Partial<ApplicantProfile>> => {
-  try {
-    const prompt = `
-    Analyze the attached CV/Resume document and extract the applicant's profile data.
-    Return the result strictly as a JSON object matching this structure:
-    {
-      "fullName": "Name Surname",
-      "university": "University Name",
-      "department": "Department Name",
-      "grade": "Current Grade",
-      "specialty": "Main profession title",
-      "keySkill": "A short hook sentence (Max 15 words).",
-      "startDate": "Estimated availability",
-      "phone": "Phone number if found",
-      "email": "Email address if found",
-      "linkedin": "LinkedIn profile URL if found"
-    }
-    Extract phone, email and LinkedIn even if they are just text (not links).
-    Ensure extracted text is in TURKISH.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          { inlineData: { mimeType: mimeType, data: fileBase64 } },
-          { text: prompt }
-        ]
-      },
-      config: { responseMimeType: "application/json" }
-    });
-
-    return safeJSONParse<Partial<ApplicantProfile>>(response.text || "{}", {});
-  } catch (error: any) {
-    console.error("CV Analysis Error:", error);
-    throw new Error("CV analizi yapılamadı: " + error.message);
+async function invoke<T>(
+  request: AiRequest,
+  schema: z.ZodType<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (isDemo || !supabase) {
+    return schema.parse(await demoAi(request, signal));
   }
-};
-
-export const findTechnoparkCompanies = async (city: string, technopark: string | undefined, excludeList: string[]): Promise<DiscoveredCompany[]> => {
-  try {
-    const excludeString = excludeList.length > 0 ? `Do NOT include: ${excludeList.join(', ')}.` : '';
-    const prompt = `
-    Find 10 NEW active technology companies located in ${city} ${technopark ? `specifically in ${technopark}` : ''}.
-    Focus on companies hiring interns.
-    ${excludeString}
-    Output TURKISH JSON array:
-    [ { "name": "Name", "location": "Location", "brief": "Description" } ]
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.6,
+  const { data, error } = await supabase.functions.invoke('gemini', { body: request, signal });
+  if (error) {
+    if (signal?.aborted) throw new AppError('İptal edildi.', 'ABORTED');
+    if (error instanceof FunctionsHttpError) {
+      const status = (error.context as Response | undefined)?.status ?? 500;
+      let code: ErrorCode = STATUS_CODES[status] ?? 'INTERNAL_ERROR';
+      try {
+        const payload = await (error.context as Response).json();
+        if (payload?.error?.code === 'MODEL_OUTPUT_INVALID') code = 'MODEL_OUTPUT_INVALID';
+      } catch {
+        // Gövde okunamazsa durum kodu yeterli.
       }
-    });
-
-    const result = safeJSONParse<DiscoveredCompany[]>(response.text || "[]", []);
-    if (!Array.isArray(result)) throw new Error("Invalid format");
-    return result;
-  } catch (error: any) {
-    console.error("Discovery Error:", error);
-    throw new Error(error.message || "Şirket bulunamadı.");
+      throw new AppError(`AI isteği başarısız (${status}).`, code, status);
+    }
+    throw new AppError('AI servisine ulaşılamadı.', 'NETWORK_ERROR');
   }
-};
+  const parsed = schema.safeParse((data as { data?: unknown })?.data);
+  if (!parsed.success)
+    throw new AppError('Sunucu yanıtı beklenen yapıda değil.', 'MODEL_OUTPUT_INVALID');
+  return parsed.data;
+}
 
-export const analyzeCompany = async (companyName: string): Promise<{ industry: string; focusTopic: string; contactPerson: string; email: string; sources: string[] }> => {
-  try {
-    const prompt = `
-    Research company "${companyName}" for internship in Turkey.
-    Find: Industry, Strategic Focus (for email personalization), HR Contact Name, HR Email.
-    JSON Output: { "industry": "...", "focusTopic": "...", "contactPerson": "...", "email": "..." }
-    `;
+export function analyzeCV(fileBase64: string, signal?: AbortSignal): Promise<CvExtract> {
+  return invoke(
+    { action: 'analyze-cv', fileBase64, mimeType: 'application/pdf' },
+    CvExtractSchema,
+    signal,
+  );
+}
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { tools: [{ googleSearch: {} }] }
-    });
+export function discoverCompanies(
+  city: string,
+  technopark: string,
+  exclude: string[],
+  signal?: AbortSignal,
+): Promise<DiscoverResponse> {
+  return invoke(
+    { action: 'discover', city, technopark: technopark || undefined, exclude },
+    DiscoverResponseSchema,
+    signal,
+  );
+}
 
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
-      ?.map((chunk: any) => chunk.web?.uri).filter((uri: string) => uri) || [];
+export function analyzeCompany(
+  name: string,
+  signal?: AbortSignal,
+): Promise<CompanyAnalysisResponse> {
+  return invoke({ action: 'analyze-company', name }, CompanyAnalysisResponseSchema, signal);
+}
 
-    const defaultData = {
-      industry: "Teknoloji",
-      focusTopic: `${companyName} projeleri`,
-      contactPerson: "İnsan Kaynakları",
-      email: ""
-    };
+export function toDraftProfile(profile: ApplicantProfile, hasAttachment: boolean): DraftProfile {
+  return {
+    fullName: profile.fullName,
+    university: profile.university,
+    department: profile.department,
+    specialty: profile.specialty,
+    keySkill: profile.keySkill,
+    startDate: profile.startDate,
+    tone: profile.tone,
+    phone: profile.phone || undefined,
+    email: profile.email || undefined,
+    linkedin: profile.linkedin || undefined,
+    portfolio: profile.portfolio || undefined,
+    cvUrl: profile.cvUrl || undefined,
+    hasAttachment,
+  };
+}
 
-    const data = safeJSONParse(response.text || "{}", defaultData);
-    return { ...defaultData, ...data, sources };
-
-  } catch (error) {
-    console.error("Analysis Error:", error);
-    throw new Error("Şirket analizi yapılamadı.");
-  }
-};
-
-export const generateEmail = async (profile: ApplicantProfile, company: TargetCompany): Promise<{ subject: string; body: string }> => {
-  try {
-    // Build contact info footer
-    let contactInfo = '';
-    if (profile.phone) contactInfo += `Telefon: ${profile.phone}\n`;
-    if (profile.email) contactInfo += `E-posta: ${profile.email}\n`;
-    if (profile.linkedin) contactInfo += `LinkedIn: ${profile.linkedin}\n`;
-    if (profile.portfolio) contactInfo += `Portfolio: ${profile.portfolio}\n`;
-    
-    const prompt = `
-    Write a professional internship email (Turkish).
-    FROM: ${profile.fullName} (${profile.university}, ${profile.department})
-    TO: ${company.name} (${company.analysis?.contactPerson})
-    FOCUS: ${company.analysis?.focusTopic}
-    MY SKILL: ${profile.keySkill}
-    TONE: ${profile.tone}
-    DATES: ${profile.startDate}
-    
-    Structure:
-    1. Introduction (Mention 'İşletmede Mesleki Eğitim' between ${profile.startDate}, insurance covered by school).
-    2. Connection (Link my skill to their focus topic).
-    3. Call to Action.
-    4. End with:
-    
-    Saygılarımla,
-    ${profile.fullName}
-    ${contactInfo}
-    
-    IMPORTANT: Include the contact info (phone, email, LinkedIn) at the end, NOT placeholders like "[Telefon Numaranız]". Use the actual values provided.
-    ${profile.cvUrl ? 'Also mention CV is attached to email.' : ''}
-    
-    JSON Output: { "subject": "...", "body": "..." }
-    `;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-
-    return safeJSONParse(response.text || "{}", { subject: "Başvuru", body: "Hata oluştu." });
-  } catch (error) {
-    console.error("Email Gen Error:", error);
-    throw new Error("E-posta oluşturulamadı.");
-  }
-};
+export function generateEmail(
+  profile: ApplicantProfile,
+  company: TargetCompany,
+  hasAttachment: boolean,
+  signal?: AbortSignal,
+): Promise<EmailDraft> {
+  return invoke(
+    {
+      action: 'draft-email',
+      profile: toDraftProfile(profile, hasAttachment),
+      company: {
+        name: company.name,
+        contactPerson: company.analysis?.contactPerson || undefined,
+        focusTopic: company.analysis?.focusTopic || undefined,
+        industry: company.analysis?.industry || undefined,
+      },
+    },
+    EmailDraftSchema,
+    signal,
+  );
+}
