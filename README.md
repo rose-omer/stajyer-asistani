@@ -8,6 +8,21 @@ Staj arayan öğrenci için başvuru asistanı. Şehir ya da teknokentteki şirk
 
 > GIF: keşif → onay kuyruğu → gönderim (eklenecek).
 
+## Ekran görüntüleri
+
+Görüntüler demo kipinde (VITE_DEMO=1) alındı. Şirketler, kişi adı ve mail taslağı örnek veridir; gönderim kapalıdır.
+
+| | |
+|---|---|
+| ![Profil](docs/ekran/1-profil.png)<br>Profil | ![Şirket keşfi](docs/ekran/2-sirket-kesfi.png)<br>Şirket keşfi |
+| ![Havuz ve şirket analizi](docs/ekran/3-havuz-analiz.png)<br>Havuz ve şirket analizi | ![Onay kuyruğu](docs/ekran/4-onay-kuyrugu.png)<br>Onay kuyruğu |
+
+## Kullanım
+
+![Kullanım akışı](docs/ekran/kullanim.gif)
+
+Profil doldurulur, şirketler bulunur, taslaklar onay kuyruğuna düşer. Hiçbir mail onaysız gitmez.
+
 ## Akış
 
 1. **Profil**: PDF özgeçmiş yükle (en çok 5 MB). Yapay zeka alanları önerir; her öneriyi tek tek kabul edersin.
